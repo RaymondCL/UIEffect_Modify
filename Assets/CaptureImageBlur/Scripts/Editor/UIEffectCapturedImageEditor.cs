@@ -13,8 +13,6 @@ namespace Coffee.UIExtensions.Editors
 	[CanEditMultipleObjects]
 	public class UIEffectCapturedImageEditor : RawImageEditor
 	{
-		static readonly GUIContent contentEffectColor = new GUIContent ("Effect Color");
-
 		//################################
 		// Constant or Static Members.
 		//################################
@@ -44,10 +42,7 @@ namespace Coffee.UIExtensions.Editors
 			_spReductionRate = serializedObject.FindProperty("m_ReductionRate");
 			_spFilterMode = serializedObject.FindProperty("m_FilterMode");
 			_spIterations = serializedObject.FindProperty("m_BlurIterations");
-			_spKeepSizeToRootCanvas = serializedObject.FindProperty("m_FitToScreen");
 			_spBlurMode = serializedObject.FindProperty("m_BlurMode");
-			_spCaptureOnEnable = serializedObject.FindProperty("m_CaptureOnEnable");
-
 
 			_customAdvancedOption = (qualityMode == QualityMode.Custom);
 		}
@@ -64,48 +59,6 @@ namespace Coffee.UIExtensions.Editors
 			EditorGUI.BeginDisabledGroup(true);
 			EditorGUILayout.PropertyField(spMaterial);
 			EditorGUI.EndDisabledGroup();
-
-			//================
-			// Effect setting.
-			//================
-			var spToneMode = serializedObject.FindProperty("m_EffectMode");
-			EditorGUILayout.PropertyField(spToneMode);
-
-			// When tone is enable, show parameters.
-			if (spToneMode.intValue != (int)EffectMode.None)
-			{
-				EditorGUI.indentLevel++;
-				EditorGUILayout.PropertyField(serializedObject.FindProperty("m_EffectFactor"));
-				EditorGUI.indentLevel--;
-			}
-
-			//================
-			// Color setting.
-			//================
-			var spColorMode = serializedObject.FindProperty("m_ColorMode");
-			EditorGUILayout.PropertyField(spColorMode);
-
-			// When color is enable, show parameters.
-			//if (spColorMode.intValue != (int)ColorMode.Multiply)
-			{
-				EditorGUI.indentLevel++;
-
-				SerializedProperty spColor = serializedObject.FindProperty(colorProperty);
-
-				EditorGUI.BeginChangeCheck ();
-				EditorGUI.showMixedValue = spColor.hasMultipleDifferentValues;
-#if UNITY_2018_1_OR_NEWER
-				spColor.colorValue = EditorGUILayout.ColorField (contentEffectColor, spColor.colorValue, true, false, false);
-#else
-				spColor.colorValue = EditorGUILayout.ColorField (contentEffectColor, spColor.colorValue, true, false, false, null);
-#endif
-				if (EditorGUI.EndChangeCheck ()) {
-					spColor.serializedObject.ApplyModifiedProperties ();
-				}
-
-				EditorGUILayout.PropertyField(serializedObject.FindProperty("m_ColorFactor"));
-				EditorGUI.indentLevel--;
-			}
 
 			//================
 			// Blur setting.
@@ -155,9 +108,6 @@ namespace Coffee.UIExtensions.Editors
 			//================
 			GUILayout.Space(10);
 			EditorGUILayout.LabelField("Advanced Option", EditorStyles.boldLabel);
-
-			EditorGUILayout.PropertyField(_spCaptureOnEnable);// CaptureOnEnable.
-			EditorGUILayout.PropertyField(_spKeepSizeToRootCanvas);// Keep Graphic Size To RootCanvas.
 
 			EditorGUI.BeginChangeCheck();
 			QualityMode quality = qualityMode;
