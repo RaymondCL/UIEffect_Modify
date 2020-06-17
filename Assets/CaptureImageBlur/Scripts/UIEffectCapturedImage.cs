@@ -7,19 +7,12 @@ using UnityEngine.UI;
 
 namespace Coffee.UIExtensions
 {
-	/// <summary>
-	/// UIEffectCapturedImage
-	/// </summary>
 	[AddComponentMenu("UI/UIEffect/UIEffectCapturedImage", 200)]
 	public class UIEffectCapturedImage : RawImage
 #if UNITY_EDITOR
 		, ISerializationCallbackReceiver
 #endif
 	{
-
-		//################################
-		// Constant or Static Members.
-		//################################
 		public const string shaderName = "UI/Hidden/UI-EffectCapture";
 
 		/// <summary>
@@ -34,10 +27,6 @@ namespace Coffee.UIExtensions
 			x8 = 8,
 		}
 
-
-		//################################
-		// Serialize Members.
-		//################################
 		[Tooltip("Effect factor between 0(no effect) and 1(complete effect).")]
 		[FormerlySerializedAs("m_ToneLevel")]
 		[SerializeField][Range(0, 1)] float m_EffectFactor = 1;

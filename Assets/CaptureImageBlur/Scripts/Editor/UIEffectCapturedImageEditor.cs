@@ -1,4 +1,5 @@
-﻿using UnityEditor;
+﻿using System.Linq;
+using UnityEditor;
 using UnityEditor.UI;
 using UnityEngine;
 using DesamplingRate = Coffee.UIExtensions.UIEffectCapturedImage.DesamplingRate;
@@ -12,6 +13,8 @@ namespace Coffee.UIExtensions.Editors
 	[CanEditMultipleObjects]
 	public class UIEffectCapturedImageEditor : RawImageEditor
 	{
+		static readonly GUIContent contentEffectColor = new GUIContent ("Effect Color");
+
 		//################################
 		// Constant or Static Members.
 		//################################
@@ -48,6 +51,82 @@ namespace Coffee.UIExtensions.Editors
 
 			_customAdvancedOption = (qualityMode == QualityMode.Custom);
 		}
+		
+		/// <summary>
+		/// Draw effect properties.
+		/// </summary>
+		public static void DrawEffectProperties(SerializedObject serializedObject, string colorProperty = "m_Color")
+		{
+			//================
+			// Effect material.
+			//================
+			var spMaterial = serializedObject.FindProperty("m_EffectMaterial");
+			EditorGUI.BeginDisabledGroup(true);
+			EditorGUILayout.PropertyField(spMaterial);
+			EditorGUI.EndDisabledGroup();
+
+			//================
+			// Effect setting.
+			//================
+			var spToneMode = serializedObject.FindProperty("m_EffectMode");
+			EditorGUILayout.PropertyField(spToneMode);
+
+			// When tone is enable, show parameters.
+			if (spToneMode.intValue != (int)EffectMode.None)
+			{
+				EditorGUI.indentLevel++;
+				EditorGUILayout.PropertyField(serializedObject.FindProperty("m_EffectFactor"));
+				EditorGUI.indentLevel--;
+			}
+
+			//================
+			// Color setting.
+			//================
+			var spColorMode = serializedObject.FindProperty("m_ColorMode");
+			EditorGUILayout.PropertyField(spColorMode);
+
+			// When color is enable, show parameters.
+			//if (spColorMode.intValue != (int)ColorMode.Multiply)
+			{
+				EditorGUI.indentLevel++;
+
+				SerializedProperty spColor = serializedObject.FindProperty(colorProperty);
+
+				EditorGUI.BeginChangeCheck ();
+				EditorGUI.showMixedValue = spColor.hasMultipleDifferentValues;
+#if UNITY_2018_1_OR_NEWER
+				spColor.colorValue = EditorGUILayout.ColorField (contentEffectColor, spColor.colorValue, true, false, false);
+#else
+				spColor.colorValue = EditorGUILayout.ColorField (contentEffectColor, spColor.colorValue, true, false, false, null);
+#endif
+				if (EditorGUI.EndChangeCheck ()) {
+					spColor.serializedObject.ApplyModifiedProperties ();
+				}
+
+				EditorGUILayout.PropertyField(serializedObject.FindProperty("m_ColorFactor"));
+				EditorGUI.indentLevel--;
+			}
+
+			//================
+			// Blur setting.
+			//================
+			var spBlurMode = serializedObject.FindProperty("m_BlurMode");
+			EditorGUILayout.PropertyField(spBlurMode);
+
+			// When blur is enable, show parameters.
+			if (spBlurMode.intValue != (int)BlurMode.None)
+			{
+				EditorGUI.indentLevel++;
+				EditorGUILayout.PropertyField(serializedObject.FindProperty("m_BlurFactor"));
+
+				var spAdvancedBlur = serializedObject.FindProperty("m_AdvancedBlur");
+				if (spAdvancedBlur != null)
+				{
+					EditorGUILayout.PropertyField(spAdvancedBlur);
+				}
+				EditorGUI.indentLevel--;
+			}
+		}
 
 		/// <summary>
 		/// Implement this function to make a custom inspector.
@@ -69,7 +148,7 @@ namespace Coffee.UIExtensions.Editors
 			//================
 			GUILayout.Space(10);
 			EditorGUILayout.LabelField("Capture Effect", EditorStyles.boldLabel);
-			UIEffectEditor.DrawEffectProperties(serializedObject, "m_EffectColor");
+			DrawEffectProperties(serializedObject, "m_EffectColor");
 
 			//================
 			// Advanced option.
