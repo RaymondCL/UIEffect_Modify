@@ -20,17 +20,12 @@ Shader "UI/Hidden/UI-EffectCapture"
 			#pragma vertex vert
 			#pragma fragment frag
 			#pragma target 2.0
-
-			#pragma shader_feature __ GRAYSCALE SEPIA NEGA PIXEL
-			#pragma shader_feature __ ADD SUBTRACT FILL
 			
 			#include "UnityCG.cginc"
 			#include "UI-Effect.cginc"
 
 			sampler2D _MainTex;
 			float4 _MainTex_TexelSize;
-			half4 _EffectFactor;
-			fixed4 _ColorFactor;
 
 			v2f_img vert(appdata_img v)
 			{
@@ -45,23 +40,7 @@ Shader "UI/Hidden/UI-EffectCapture"
 
 			fixed4 frag(v2f_img IN) : SV_Target
 			{
-				half effectFactor = _EffectFactor.x;
-				fixed4 colorFactor = _ColorFactor;
-				
-				#if PIXEL
-				half2 pixelScale = max(2, (1 - effectFactor) * _MainTex_TexelSize.zw);
-				IN.uv = round(IN.uv * pixelScale) / pixelScale;
-				#endif
-
 				half4 color = tex2D(_MainTex, IN.uv);
-
-				#if defined (UI_TONE)
-				color = ApplyToneEffect(color, effectFactor);
-				#endif
-				
-				#if defined (UI_COLOR)
-				color = ApplyColorEffect(color, colorFactor);
-				#endif
 
 				color.a = 1;
 				return color;
