@@ -18,6 +18,17 @@ public class UICaptureBlur : RawImage
         x4 = 4,
         x8 = 8,
     }
+    
+    RenderTexture _rt;
+    RenderTargetIdentifier _rtId;
+
+    static int s_CopyId;
+    static int s_EffectId1;
+    static int s_EffectId2;
+    static int s_EffectFactorId;
+    static int s_ColorFactorId;
+    static CommandBuffer s_CommandBuffer;
+
 
     [Tooltip("How far is the blurring from the graphic.")]
     [FormerlySerializedAs("m_Blur")]
@@ -43,11 +54,6 @@ public class UICaptureBlur : RawImage
     /// How far is the blurring from the graphic.
     /// </summary>
     public float blurFactor { get { return m_BlurFactor; } set { m_BlurFactor = Mathf.Clamp(value, 0, 4); } }
-
-    /// <summary>
-    /// Effect material.
-    /// </summary>
-    public virtual Material effectMaterial { get { return m_EffectMaterial; } }
 
     /// <summary>
     /// Desampling rate of the generated RenderTexture.
@@ -159,49 +165,41 @@ public class UICaptureBlur : RawImage
         }
     }
 
-    /// <summary>
-    /// Capture rendering result.
-    /// </summary>
     public void Capture()
     {
-        Release();
+        Release();  //先释放掉当前图，避免被重复抓取到
         // Cache some ids.
         if (s_CopyId == 0)
         {
-            s_CopyId = Shader.PropertyToID("_UIEffectCapturedImage_ScreenCopyId");
-            s_EffectId1 = Shader.PropertyToID("_UIEffectCapturedImage_EffectId1");
-            s_EffectId2 = Shader.PropertyToID("_UIEffectCapturedImage_EffectId2");
+            s_CopyId = Shader.PropertyToID("_UICaptureBlur_ScreenCopyId");  //这三个只是借用 Shader.PropertyToID 方法，获取一个唯一Id
+            s_EffectId1 = Shader.PropertyToID("_UICaptureBlur_EffectId1");
+            s_EffectId2 = Shader.PropertyToID("_UICaptureBlur_EffectId2");
 
-            s_EffectFactorId = Shader.PropertyToID("_EffectFactor");
+            s_EffectFactorId = Shader.PropertyToID("_EffectFactor");  //这两个是真实的Shader属性，Shader中需要使用的
             s_ColorFactorId = Shader.PropertyToID("_ColorFactor");
             s_CommandBuffer = new CommandBuffer();
         }
 
-        // If size of result RT has changed, release it.
         int w, h;
-        GetDesamplingSize(m_DesamplingRate, out w, out h);
+        GetDesamplingSize(m_DesamplingRate, out w, out h);  //获取重采样尺寸
         if (_rt && (_rt.width != w || _rt.height != h))
         {
-            _Release(ref _rt);
+            _Release(ref _rt);         //如果RT的宽高有变化，则需要先释放掉
         }
 
-        // Generate RT for result.
-        if (_rt == null)
+        if (_rt == null)  //如果RT为空，则生成RT
         {
             _rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Default);
             _rt.filterMode = m_FilterMode;
             _rt.useMipMap = false;
             _rt.wrapMode = TextureWrapMode.Clamp;
-            _rtId = new RenderTargetIdentifier(_rt);
+            _rtId = new RenderTargetIdentifier(_rt);  //创建一个渲染标识
         }
-        SetupCommandBuffer();
+        SetupCommandBuffer();  //设置CommandBuffer
     }
 
     void SetupCommandBuffer()
     {
-        // Material for effect.
-        Material mat = m_EffectMaterial;
-
         if (s_CommandBuffer == null)
         {
             s_CommandBuffer = new CommandBuffer();
@@ -209,28 +207,28 @@ public class UICaptureBlur : RawImage
 
         // [1] Capture from back buffer (back buffer -> copied screen).
         int w, h;
-        GetDesamplingSize(DesamplingRate.None, out w, out h);
-        s_CommandBuffer.GetTemporaryRT(s_CopyId, w, h, 0, m_FilterMode);
+        GetDesamplingSize(DesamplingRate.None, out w, out h);  //获取屏幕的分辨率
+        s_CommandBuffer.GetTemporaryRT(s_CopyId, w, h, 0, m_FilterMode); //获取一张临时的RT，存储标识为s_CopyId
 #if UNITY_EDITOR
-        s_CommandBuffer.Blit(Resources.FindObjectsOfTypeAll<RenderTexture>().FirstOrDefault(x => x.name == "GameView RT"), s_CopyId);
+        s_CommandBuffer.Blit(Resources.FindObjectsOfTypeAll<RenderTexture>().FirstOrDefault(x => x.name == "GameView RT"), s_CopyId);  //将Editor下的Game视图的RT拷贝到s_CopyId的RT中
 #else
-			s_CommandBuffer.Blit(BuiltinRenderTextureType.BindableTexture, s_CopyId);
+		s_CommandBuffer.Blit(BuiltinRenderTextureType.BindableTexture, s_CopyId);  //将当前屏幕图像写入到RT中
 #endif
 
         // [2] Apply base effect with reduction buffer (copied screen -> effect1).
-        GetDesamplingSize(m_ReductionRate, out w, out h);
+        GetDesamplingSize(m_ReductionRate, out w, out h);     //获取实际需要渲染的尺寸（通过缩小的倍数）
         s_CommandBuffer.GetTemporaryRT(s_EffectId1, w, h, 0, m_FilterMode);
-        s_CommandBuffer.Blit(s_CopyId, s_EffectId1, mat, 0);
-        s_CommandBuffer.ReleaseTemporaryRT(s_CopyId);
+        s_CommandBuffer.Blit(s_CopyId, s_EffectId1, m_EffectMaterial, 0);  //先做一次基础的处理，使用shader中的第一个Pass
+        s_CommandBuffer.ReleaseTemporaryRT(s_CopyId); 
 
         s_CommandBuffer.GetTemporaryRT(s_EffectId2, w, h, 0, m_FilterMode);
-        for (int i = 0; i < m_BlurIterations; i++)
+        for (int i = 0; i < m_BlurIterations; i++)  //进行模糊迭代
         {
             // [3] Apply blurring with reduction buffer (effect1 -> effect2, or effect2 -> effect1).
             s_CommandBuffer.SetGlobalVector(s_EffectFactorId, new Vector4(m_BlurFactor, 0));
-            s_CommandBuffer.Blit(s_EffectId1, s_EffectId2, mat, 1);
+            s_CommandBuffer.Blit(s_EffectId1, s_EffectId2, m_EffectMaterial, 1);
             s_CommandBuffer.SetGlobalVector(s_EffectFactorId, new Vector4(0, m_BlurFactor));
-            s_CommandBuffer.Blit(s_EffectId2, s_EffectId1, mat, 1);
+            s_CommandBuffer.Blit(s_EffectId2, s_EffectId1, m_EffectMaterial, 1);
         }
         s_CommandBuffer.ReleaseTemporaryRT(s_EffectId2);
 
@@ -248,7 +246,8 @@ public class UICaptureBlur : RawImage
         }
 #endif
         // Execute command buffer.
-        canvas.rootCanvas.GetComponent<CanvasScaler>().StartCoroutine(_CoUpdateTextureOnNextFrame());
+        // canvas.rootCanvas.GetComponent<CanvasScaler>().StartCoroutine(_CoUpdateTextureOnFrameEnd());
+        StartCoroutine(_CoUpdateTextureOnFrameEnd());
     }
 
     /// <summary>
@@ -272,16 +271,6 @@ public class UICaptureBlur : RawImage
         base.Reset();
     }
 #endif
-
-    RenderTexture _rt;
-    RenderTargetIdentifier _rtId;
-
-    static int s_CopyId;
-    static int s_EffectId1;
-    static int s_EffectId2;
-    static int s_EffectFactorId;
-    static int s_ColorFactorId;
-    static CommandBuffer s_CommandBuffer;
 
     /// <summary>
     /// Release genarated objects.
@@ -331,7 +320,7 @@ public class UICaptureBlur : RawImage
     /// <summary>
     /// Set texture on next frame.
     /// </summary>
-    IEnumerator _CoUpdateTextureOnNextFrame()
+    IEnumerator _CoUpdateTextureOnFrameEnd()
     {
         yield return new WaitForEndOfFrame();
         Graphics.ExecuteCommandBuffer(s_CommandBuffer);
